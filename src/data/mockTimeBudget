@@ -1,0 +1,80 @@
+// =======================================================
+// 【第九阶段：Mock 时长约束筛选】
+// 🔴 TODO: 后续替换为后端"时长约束价值密度贪心筛选"接口（李文潇负责）
+// 约束：仅前端 UI + Mock 返回，不实现真实贪心算法
+// =======================================================
+
+/**
+ * 模拟时长约束筛选（Mock 贪心逻辑）
+ * 真实算法由李文潇在后端实现：
+ *   - 按价值密度（景点评分 / 停留时长）排序
+ *   - 贪心填入总时长限制内的景点集合
+ *
+ * 本函数 Mock 行为：按固定阈值剔除低价值景点
+ *
+ * @param {Array} poiIds 候选景点 id 数组
+ * @param {Array} pois 完整 POI 数据数组（用于查停留时长）
+ * @param {number} timeBudgetMinutes 总时长限制（分钟）
+ * @returns {{ kept: Array<string>, removed: Array<string>, summary: Object }}
+ */
+export function mockTimeBudgetFilter(poiIds, pois, timeBudgetMinutes) {
+  // 计算每个景点的停留时长总和
+  const totalStay = poiIds.reduce((sum, id) => {
+    const poi = pois.find(p => p.id === id)
+    return sum + (poi ? poi.stayDuration : 0)
+  }, 0)
+
+  // 加上景点之间的行走时间（每个转换算 15min）
+  const transitTime = (poiIds.length - 1) * 15
+  const totalEstimated = totalStay + transitTime
+
+  // 如果总时长本来就够 → 全部保留
+  if (totalEstimated <= timeBudgetMinutes) {
+    return {
+      kept: [...poiIds],
+      removed: [],
+      summary: {
+        totalEstimated,
+        timeBudget: timeBudgetMinutes,
+        savedMinutes: 0,
+        note: '当前景点集合已在时长预算内'
+      }
+    }
+  }
+
+  // Mock 贪心：按人流指数低优先剔除（价值密度低的先砍）
+  const sorted = poiIds
+    .map(id => ({ id, poi: pois.find(p => p.id === id) }))
+    .sort((a, b) => a.poi.crowdIndex - b.poi.crowdIndex)  // 人流低的先删
+
+  const kept = []
+  const removed = []
+  let currentStay = 0
+  let count = 0
+
+  for (const item of sorted) {
+    const projectedStay = currentStay + item.poi.stayDuration
+    const projectedTotal = projectedStay + (count + 1 - 1) * 15  // count 加了才知道 transit
+
+    if (projectedTotal <= timeBudgetMinutes) {
+      kept.push(item.id)
+      currentStay += item.poi.stayDuration
+      count++
+    } else {
+      removed.push(item.id)
+    }
+  }
+
+  return {
+    kept,
+    removed,
+    summary: {
+      originalTotal: totalEstimated,
+      newTotal: currentStay + Math.max(0, kept.length - 1) * 15,
+      timeBudget: timeBudgetMinutes,
+      savedMinutes: totalEstimated - (currentStay + Math.max(0, kept.length - 1) * 15),
+      removedCount: removed.length,
+      keptCount: kept.length
+    }
+  }
+}
