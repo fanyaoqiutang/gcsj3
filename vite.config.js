@@ -19,6 +19,13 @@ export default defineConfig({
   // 开发服务器配置
   server: {
     port: 5173,
-    open: true  // 启动后自动打开浏览器
+    open: true,
+    // 🔴 关键：/api/* 请求代理到 Flask 后端
+    proxy: {
+      '/api': {
+        target: 'http://localhost:5000',
+        changeOrigin: true
+      }
+    }
   }
 })

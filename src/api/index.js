@@ -51,8 +51,8 @@ function mockAdapter(config) {
 
 // ---------- 导出所有业务 API ----------
 export { guideApi } from './guide'
+export { routeApi } from './route'
 // 后续继续加：
-// export { routeApi } from './route'       // 路径规划（李文潇）
 // export { poiApi } from './poi'           // POI 查询（王茜）
 // export { itineraryApi } from './itinerary' // 日程保存
 

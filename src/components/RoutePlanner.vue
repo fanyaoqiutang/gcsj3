@@ -30,7 +30,10 @@
       </div>
     </div>
 
-    <button class="btn-plan" :disabled="!startPoint || !endPoint" @click="handlePlanRoute">🎯 规划路径</button>
+    <button class="btn-plan" :disabled="!startPoint || !endPoint || loading" @click="handlePlanRoute">
+      <span v-if="loading">⏳ 规划中...</span>
+      <span v-else>🎯 规划路径</span>
+    </button>
 
     <!-- 路线指标 -->
     <div v-if="routeResult" class="route-result">
@@ -77,8 +80,8 @@
 
 <script setup>
 import { ref } from 'vue'
-import { DEBUG_MODE } from '@/constants/config'
-import { getMockRouteByMode } from '@/data/mockRoutes'
+import { DEBUG_MODE, USE_MOCK } from '@/constants/config'
+import { routeApi } from '@/api'
 
 const props = defineProps({
   startPoint: { type: Array, default: null },
@@ -90,17 +93,40 @@ const emit = defineEmits(['clear-points', 'plan-route', 'apply-budget', 'undo-bu
 // 原有状态
 const travelMode = ref('walk')
 const routeResult = ref(null)
+const loading = ref(false)
 
 // 🔶 第九阶段
 const timeBudget = ref(null)
 const budgetResult = ref(null)
 const presetBudgets = [120, 180, 240, 360]
 
-function handlePlanRoute() {
-  const routeGeoJson = getMockRouteByMode(travelMode.value, props.startPoint, props.endPoint)
-  const props2 = routeGeoJson.features[0].properties
-  routeResult.value = props2
-  emit('plan-route', { start: props.startPoint, end: props.endPoint, mode: travelMode.value, geoJson: routeGeoJson, metrics: props2 })
+async function handlePlanRoute() {
+  loading.value = true
+  routeResult.value = null
+  try {
+    // 后端请求：支持 USE_MOCK 自动切换
+    const res = await routeApi.planRoute({
+      origin: props.startPoint,
+      destination: props.endPoint,
+      mode: travelMode.value,
+      algorithm: 'astar'
+    })
+    routeResult.value = res.metrics
+    emit('plan-route', {
+      start: props.startPoint, end: props.endPoint,
+      mode: travelMode.value,
+      geoJson: res.geojson,
+      metrics: res.metrics,
+      segments: res.segments
+    })
+  } catch (err) {
+    console.error('[RoutePlanner] 路径规划失败:', err)
+    alert(USE_MOCK
+      ? 'Mock 模式异常，请检查 registerMockHandler 是否注册' 
+      : `后端请求失败: ${err.message}`)
+  } finally {
+    loading.value = false
+  }
 }
 
 // 🔶 第九阶段

@@ -15,3 +15,6 @@ __pycache__/
 
 # 敏感文件
 .env
+
+# markdown
+*.md
