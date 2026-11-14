@@ -1,149 +1,95 @@
+<!--
+  【应用根组件】
+  只做路由出口 + 顶部导航栏
+  各页面独立维护自己的左侧参数面板 + 中间地图 + 右侧视图
+-->
 <template>
-  <AppLayout>
-    <!-- ========== 左侧：规划面板 ========== -->
-    <template #left-top>
-      <RoutePlanner ref="routePlannerRef"
-        :start-point="startPoint" :end-point="endPoint"
-        @clear-points="handleClearPoints" @plan-route="handlePlanRoute"
-        @apply-budget="handleApplyBudget" @undo-budget="handleUndoBudget" />
-    </template>
+  <div class="app-pages-wrapper">
 
-    <template #left-bottom>
-      <RouteOptionsPanel
-        :options="routeOptions" :active-option-id="activeRouteOptionId"
-        @select="handleOptionSelect" @visibility-change="handleVisibilityChange"
-        @trigger-block="handleTriggerBlock" @clear-block="handleClearBlock" />
-    </template>
+    <!-- ========== 顶部导航栏 ========== -->
+    <nav class="top-nav">
+      <div class="nav-brand">🗺️ 蓉城游踪</div>
+      <div class="nav-links">
+        <router-link to="/"                class="nav-link" active-class="active">🏠 首页 · 地图总览</router-link>
+        <router-link to="/point-plan"      class="nav-link" active-class="active">📍 单点路径规划</router-link>
+        <router-link to="/multi-spot-plan" class="nav-link" active-class="active">🎯 多景点游览</router-link>
+        <router-link v-if="store.isDebugMode" to="/dev-performance" class="nav-link dev" active-class="active">🛠️ 开发者工具</router-link>
+      </div>
+      <div class="nav-toggles">
+        <button class="nav-toggle-btn" :class="{ active: store.isSelectPointMode }"
+          @click="store.toggleSelectPoint()"
+          :title="store.isSelectPointMode ? '选点模式已开启 · 点地图拾取起终点' : '选点模式（单点规划页生效）'"
+        >📍 选点</button>
+        <button class="nav-toggle-btn" :class="{ active: store.isDebugMode }"
+          @click="store.toggleDebug()"
+          :title="store.isDebugMode ? '调试模式已开启 · 显示开发者入口' : '调试模式'"
+        >🛠️ 调试</button>
+      </div>
+    </nav>
 
-    <!-- ========== 中间：地图 ========== -->
-    <template #map>
-      <MapContainer ref="mapContainerRef" @poi-click="handlePoiClick" @points-picked="handlePointsPicked" />
+    <!-- ========== 选点模式激活提示条（全局） ========== -->
+    <div v-if="store.isSelectPointMode" class="select-banner">
+      <span>📍 选点模式：{{ store.selectedStart ? '✅ 起点已拾取 · 继续点击地图拾取终点' : '点地图拾取起点' }}</span>
+      <button class="banner-close" @click="store.toggleSelectPoint()">✕ 退出</button>
+    </div>
 
-      <!-- PoiPopup 悬浮在地图上方（相对 map-area 定位） -->
-      <PoiPopup :poi-data="currentPoi" :visible="popupVisible" :itinerary="itinerary"
-        @close="closePopup" @add-to-itinerary="handleAddPoiToItinerary" />
-    </template>
-
-    <!-- ========== 右侧：日程 + 攻略 ========== -->
-    <template #right>
-      <ItineraryPanel :itinerary="itinerary"
-        @poi-locate="handlePoiLocate" @itinerary-change="handleItineraryChange" @redraw-route="handleRedrawRoute" />
-
-      <!-- 第十阶段已开发，保留在右侧栏 -->
-      <GuidePanel @budget-change="() => {}" @packing-change="() => {}" />
-    </template>
-  </AppLayout>
+    <!-- ========== 路由出口 ========== -->
+    <main class="page-container" :class="{ 'has-banner': store.isSelectPointMode }">
+      <router-view v-slot="{ Component }">
+        <transition name="fade" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
+    </main>
+  </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { DEBUG_MODE } from '@/constants/config'
-import AppLayout from '@/layout/AppLayout.vue'
-import MapContainer from '@/components/MapContainer.vue'
-import RoutePlanner from '@/components/RoutePlanner.vue'
-import PoiPopup from '@/components/PoiPopup.vue'
-import ItineraryPanel from '@/components/ItineraryPanel.vue'
-import RouteOptionsPanel from '@/components/RouteOptionsPanel.vue'
-import GuidePanel from '@/components/GuidePanel.vue'
+import { onMounted, onUnmounted } from 'vue'
+import { useGlobalStore } from '@/store/global'
+const store = useGlobalStore()
 
-import { mockItinerary } from '@/data/mockItinerary'
-import { mockPois } from '@/data/mockPois'
-import { generateMockMultiPoiRoute } from '@/data/mockRoutes'
-import { mockRouteOptions } from '@/data/mockRouteOptions'
-import { mockBlockedSegments, getDetourRoute } from '@/data/mockDetour'
-import { mockTimeBudgetFilter } from '@/data/mockTimeBudget'
-
-const mapContainerRef = ref(null)
-const routePlannerRef = ref(null)
-
-// 状态
-const itinerary = ref(JSON.parse(JSON.stringify(mockItinerary)))
-const startPoint = ref(null); const endPoint = ref(null)
-const popupVisible = ref(false); const currentPoi = ref(null)
-const routeOptions = ref([]); const activeRouteOptionId = ref(null)
-
-onMounted(() => {
-  routeOptions.value = mockRouteOptions
-  routeOptions.value.forEach(opt => mapContainerRef.value?.addRouteOption(opt))
-  if (routeOptions.value.length > 0) handleOptionSelect(routeOptions.value[0])
-  mapContainerRef.value?.fitAllRoutes()
-  if (DEBUG_MODE) console.log('[App] 布局重构完成，所有组件挂载 OK')
-})
-
-// ===== POI 弹窗 =====
-function handlePoiClick(poiData) {
-  currentPoi.value = poiData
-  popupVisible.value = true
-  // 🔶 autoPan：让 OpenLayers Overlay 自动平移地图保证弹窗可见
-  mapContainerRef.value?.panPopupIntoView(poiData.lon, poiData.lat)
-}
-function closePopup() { popupVisible.value = false; currentPoi.value = null }
-function handleAddPoiToItinerary({ poiData, targetDay }) {
-  let dayIdx
-  if (targetDay === 'new') {
-    itinerary.value.push({ day: itinerary.value.length + 1, dateLabel: `Day ${itinerary.value.length + 1} · 新行程`, spots: [{ poiId: poiData.id, order: 1, note: '待定' }] })
-    dayIdx = itinerary.value.length - 1
-  } else {
-    dayIdx = itinerary.value.findIndex(d => d.day === Number(targetDay))
-    if (dayIdx >= 0) itinerary.value[dayIdx].spots.push({ poiId: poiData.id, order: itinerary.value[dayIdx].spots.length + 1, note: '待定' })
-  }
-  closePopup(); redrawDayRoute(dayIdx)
-}
-
-// ===== 日程 ↔ 路线 =====
-function handleItineraryChange({ dayIdx }) { redrawDayRoute(dayIdx) }
-function handleRedrawRoute(dayIdx) { redrawDayRoute(dayIdx) }
-function redrawDayRoute(dayIdx) {
-  const day = itinerary.value[dayIdx]
-  if (!day || day.spots.length < 2) return
-  const coords = day.spots.map(s => { const poi = mockPois.find(p => p.id === s.poiId); return [poi.lon, poi.lat] })
-  const geoJson = generateMockMultiPoiRoute(coords, 'walk')
-  if (geoJson) mapContainerRef.value?.renderRouteGeoJson(geoJson, 'walk')
-}
-
-// ===== 起终点 / 规划 =====
-function handlePointsPicked({ start, end }) { startPoint.value = start; endPoint.value = end }
-function handleClearPoints() { startPoint.value = null; endPoint.value = null; mapContainerRef.value?.clearAll() }
-function handlePlanRoute({ geoJson, mode }) { mapContainerRef.value?.renderRouteGeoJson(geoJson, mode) }
-function handlePoiLocate({ lon, lat }) { mapContainerRef.value?.flyToPoi(lon, lat) }
-
-// ===== 多方案 =====
-function handleOptionSelect(opt) { activeRouteOptionId.value = opt.optionId; mapContainerRef.value?.setActiveRoute(opt.optionId) }
-function handleVisibilityChange({ optionId, visible }) {
-  mapContainerRef.value?.setRouteVisibility(optionId, visible)
-  if (!visible && activeRouteOptionId.value === optionId) {
-    const next = routeOptions.value.find(o => o.optionId !== optionId)
-    if (next) { activeRouteOptionId.value = next.optionId; mapContainerRef.value?.setActiveRoute(next.optionId) }
-    else { activeRouteOptionId.value = null; mapContainerRef.value?.setActiveRoute(null) }
-  }
-}
-
-// ===== 封闭仿真 =====
-function handleTriggerBlock(segmentId) {
-  const segment = mockBlockedSegments.find(s => s.segmentId === segmentId); if (!segment) return
-  mapContainerRef.value?.renderBlockedSegment(segment)
-  const detourGeoJson = getDetourRoute(segmentId)
-  if (detourGeoJson) mapContainerRef.value?.renderDetourRoute(detourGeoJson)
-}
-function handleClearBlock() { mapContainerRef.value?.clearBlockedAndDetour() }
-
-// ===== 时长约束 =====
-function handleApplyBudget({ timeBudget }) {
-  const allPoiIds = mockPois.map(p => p.id)
-  const result = mockTimeBudgetFilter(allPoiIds, mockPois, timeBudget)
-  mapContainerRef.value?.highlightRemovedPois(result.removed)
-  itinerary.value.forEach(day => { day.spots.forEach(spot => { spot.isRemoved = result.removed.includes(spot.poiId) }) })
-  routePlannerRef.value?.setBudgetResult({ ...result.summary, removedCount: result.removed.length, keptCount: result.kept.length, savedMinutes: result.summary.savedMinutes || 0 })
-  if (DEBUG_MODE) console.log('[App] 时长约束筛选:', result)
-}
-function handleUndoBudget() { mapContainerRef.value?.clearRemovedPoiHighlights(); itinerary.value.forEach(day => { day.spots.forEach(spot => { spot.isRemoved = false }) }) }
+// ESC 快捷退出选点模式
+function onKey(e) { if (e.key === 'Escape' && store.isSelectPointMode) store.toggleSelectPoint() }
+onMounted(() => window.addEventListener('keydown', onKey))
+onUnmounted(() => window.removeEventListener('keydown', onKey))
 </script>
 
-<style>
-/* 全局重置：防止 body/html 默认 margin 导致白边 */
-html, body, #app-root {
-  margin: 0; padding: 0;
-  width: 100%; height: 100%;
-  overflow: hidden;
+<style scoped>
+.top-nav {
+  height: 52px; background: var(--color-card); border-bottom: 1px solid var(--color-border);
+  display: flex; align-items: center; padding: 0 20px; gap: 16px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06); flex-shrink: 0;
 }
+.nav-brand { font-size: 16px; font-weight: 700; color: var(--color-primary); letter-spacing: 1px; white-space: nowrap; }
+.nav-links { display: flex; gap: 2px; flex: 1; flex-wrap: wrap; }
+.nav-link {
+  padding: 6px 12px; border-radius: var(--radius-btn); font-size: 12px;
+  color: var(--color-text-sub); text-decoration: none; transition: all 0.15s;
+}
+.nav-link:hover { background: var(--color-btn-sec-bg); color: var(--color-text); }
+.nav-link.active { background: var(--color-tab-bg); color: var(--color-primary); font-weight: 600; }
+.nav-link.dev { border: 1px dashed var(--color-border); }
+
+.nav-toggles { display: flex; gap: 6px; }
+.nav-toggle-btn {
+  padding: 5px 10px; font-size: 11px; border: 1px solid var(--color-border);
+  background: #fff; border-radius: var(--radius-btn); cursor: pointer;
+  transition: all 0.15s; color: var(--color-text-sub);
+}
+.nav-toggle-btn:hover { border-color: var(--color-primary); }
+.nav-toggle-btn.active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+
+.select-banner {
+  height: 30px; background: #fff5f5; border-bottom: 1px solid var(--color-primary);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; font-size: 12px; color: var(--color-primary); font-weight: 600;
+}
+.banner-close { border: none; background: transparent; cursor: pointer; font-size: 13px; color: var(--color-primary); opacity: 0.6; }
+.banner-close:hover { opacity: 1; }
+
+.page-container { flex: 1; overflow: hidden; position: relative; }
+.page-container.has-banner { height: calc(100% - 82px); }
+.fade-enter-active, .fade-leave-active { transition: opacity 0.2s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

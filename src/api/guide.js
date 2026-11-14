@@ -13,7 +13,7 @@
 // =======================================================
 
 import { USE_MOCK } from '@/constants/config'
-import { registerMockHandler, http } from './index'
+import { http } from './index'
 
 // ---------- Mock 数据（集中维护） ----------
 const mockData = {
@@ -94,14 +94,6 @@ const mockData = {
     ]}
   ]
 }
-
-// ---------- 注册 Mock Handler ----------
-// 每个 handler 返回函数型数据，模拟异步接口
-registerMockHandler('/api/guide/summary', () => mockData.summary)
-registerMockHandler('/api/guide/transport', () => mockData.transport)
-registerMockHandler('/api/guide/budget',    () => mockData.budget)
-registerMockHandler('/api/guide/notes',     () => mockData.notes)
-registerMockHandler('/api/guide/packing',    () => mockData.packing)
 
 // ---------- 导出业务 API 对象 ----------
 // 函数签名固定，USE_MOCK 切换不影响调用方式

@@ -243,14 +243,34 @@ function panPopupIntoView(lon, lat) {
     // 简单做法：flyToPoi 已经能保证点位可见，autoPan 用 OpenLayers 原生方式
   })
 }
+/** 复位视图：飞回成都中心 */
+function resetView() {
+  if (!mapInstance) return
+  mapInstance.getView().animate({
+    center: wgs84ToWebMerc([104.077774, 30.655544]),
+    zoom: 12,
+    duration: 600
+  })
+}
+
+/** 按 layerId 设置图层显隐 */
+function setLayerVisible(layerId, visible) {
+  if (!mapInstance) return
+  mapInstance.getLayers().forEach(layer => {
+    if (layer.get('layerId') === layerId) layer.setVisible(visible)
+  })
+}
+
 defineExpose({
-  setClickMode, clearAll: clearRouteAndMarkers, flyToPoi,
+  // ✅ 直接暴露 mapInstance 给外部（HomePage/PointPlan 图层开关用）
+  get mapInstance() { return mapInstance },
+
+  setClickMode, clearAll: clearRouteAndMarkers, flyToPoi, resetView, setLayerVisible,
   addRouteOption, removeRouteOption,
   setActiveRoute(id) { activeRouteIdRef = id; setActiveRoute(id) },
   setRouteVisibility, fitAllRoutes,
   renderRouteGeoJson(gj, mode) { const f = gj.features[0]; addRouteOption({ optionId:'single_temp', mode, color: mode==='metro'?'#e67e22':'#3498db', coordinates: f.geometry.coordinates }); fitAllRoutes() },
   renderBlockedSegment, renderDetourRoute, clearBlockedAndDetour,
-  // 🔶 第九阶段
   highlightRemovedPois, clearRemovedPoiHighlights,
   panPopupIntoView
 })
