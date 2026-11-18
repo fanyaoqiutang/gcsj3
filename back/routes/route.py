@@ -1,11 +1,7 @@
-
-# ========================================================
-
-# /api/route/* 蓝图
-
-# ========================================================
+# /api/route/* 蓝图，路径规划接口
 from flask import Blueprint, request, current_app, jsonify
 from back.services.route_service import plan_route
+
 
 route_bp = Blueprint('route', __name__)
 
@@ -50,6 +46,7 @@ def plan():
             }
         }]
     }
+    # 返回结果
     return jsonify({
         "geojson": geojson,
         "segments": result['segments'],
