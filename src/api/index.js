@@ -9,6 +9,10 @@
 
 import axios from 'axios'
 
+// ---------- 🔴 联调前改这里 ----------
+/** true=前端mock数据，false=调真实后端接口 */
+export const USE_MOCK = true
+
 // ---------- axios 实例占位 ----------
 // 🔴 TODO: 联调时配置真实后端地址 + 超时 + 拦截器
 export const http = axios.create({

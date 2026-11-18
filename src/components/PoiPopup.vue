@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   【第三阶段 + 第六阶段：POI详情弹窗】
   原有：景点名称、简介、图片、预估停留时长、人流指数、关闭
   第六阶段新增：【加入行程】按钮 → 选日期 → emit 给 App.vue 处理
@@ -45,7 +45,7 @@
           >✓ 加入</button>
         </div>
 
-        <p class="popup-coord" v-if="DEBUG_MODE">
+        <p class="popup-coord" v-if="store.isDebugMode">
           📍 坐标(开发调试): {{ poiData.lon.toFixed(4) }}, {{ poiData.lat.toFixed(4) }}
         </p>
       </div>
@@ -55,8 +55,9 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { DEBUG_MODE } from '@/constants/config'
+import { useGlobalStore } from '@/store'
 
+const store = useGlobalStore()
 const props = defineProps({
   poiData: { type: Object, required: true },
   visible: { type: Boolean, default: false },

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="route-options-panel">
     <h3 class="panel-title">🎯 路径方案</h3>
 
@@ -36,8 +36,8 @@
       </div>
     </div>
 
-    <!-- DEBUG_MODE 对比表 -->
-    <div v-if="DEBUG_MODE && options.length >= 2" class="compare-table">
+    <!-- store.isDebugMode 对比表 -->
+    <div v-if="store.isDebugMode && options.length >= 2" class="compare-table">
       <div class="compare-title">📊 方案对比</div>
       <table>
         <thead><tr><th>方案</th><th>距离</th><th>耗时</th><th>换乘</th></tr></thead>
@@ -84,9 +84,10 @@
 
 <script setup>
 import { reactive, ref, computed, watch } from 'vue'
-import { DEBUG_MODE } from '@/constants/config'
+import { useGlobalStore } from '@/store'
 import { mockBlockedSegments } from '@/data/mockDetour'
 
+const store = useGlobalStore()
 const props = defineProps({
   options: { type: Array, required: true },
   activeOptionId: { type: String, default: null }

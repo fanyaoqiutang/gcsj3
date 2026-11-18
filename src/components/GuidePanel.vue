@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   【第十阶段：右侧完整攻略面板】
   数据源：全部通过 api/guide.js 获取，USE_MOCK 开关控制
   功能：
@@ -162,7 +162,7 @@
       </section>
     </div>
 
-    <div v-if="DEBUG_MODE" class="debug-footer">
+    <div v-if="store.isDebugMode" class="debug-footer">
       <p>数据源: {{ USE_MOCK ? 'MOCK' : '真实后端' }}（config.USE_MOCK={{ USE_MOCK }}）</p>
       <p>🔴 TODO: 后续对接 /api/guide/* 真实接口</p>
     </div>
@@ -172,9 +172,10 @@
 <script setup>
 import { ref, computed, reactive, onMounted } from 'vue'
 import { guideApi } from '@/api/guide'
-import { DEBUG_MODE } from '@/constants/config'
-import { USE_MOCK } from '@/constants/config'
+import { USE_MOCK } from '@/api'
+import { useGlobalStore } from '@/store'
 
+const store = useGlobalStore()
 const emit = defineEmits(['budget-change', 'packing-change'])
 
 const loaded = ref(false)

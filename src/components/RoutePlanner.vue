@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="route-planner-panel">
     <h3 class="panel-title">🗺️ 单点路径规划</h3>
 
@@ -71,7 +71,7 @@
       </div>
     </div>
 
-    <div v-if="DEBUG_MODE" class="debug-info">
+    <div v-if="store.isDebugMode" class="debug-info">
       <p>出行模式: {{ travelMode }}</p>
       <p>🔴 TODO: 后续对接后端贪心筛选接口</p>
     </div>
@@ -80,9 +80,11 @@
 
 <script setup>
 import { ref } from 'vue'
-import { DEBUG_MODE, USE_MOCK } from '@/constants/config'
+import { USE_MOCK } from '@/api'
+import { useGlobalStore } from '@/store'
 import { routeApi } from '@/api'
 
+const store = useGlobalStore()
 const props = defineProps({
   startPoint: { type: Array, default: null },
   endPoint: { type: Array, default: null }

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="page-point-plan">
 
     <!-- ========== 左侧参数面板 ========== -->
@@ -125,9 +125,9 @@
 <script setup>
 import { ref, watch, computed, onMounted } from 'vue'
 import MapContainer from '@/components/MapContainer.vue'
-import { useGlobalStore } from '@/store/global'
+import { useGlobalStore } from '@/store'
 import { routeApi } from '@/api/route'
-import { wgs84ToWebMerc } from '@/utils/coordTransform'
+import { wgs84ToWebMerc } from '@/utils'
 
 const store = useGlobalStore()
 const mapRef = ref(null)

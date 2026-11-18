@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   【第五阶段 + 第六阶段：左侧日程拖拽列表 + 双向联动】
   🔶 第六阶段核心：itinerary 提升到 App.vue 作为 props
                  所有修改操作通过 emit 通知 App.vue 协调
@@ -99,7 +99,7 @@
       </div>
     </div>
 
-    <div v-if="DEBUG_MODE" class="debug-info">
+    <div v-if="store.isDebugMode" class="debug-info">
       <p>📍 点击景点 → 地图 flyTo</p>
       <p>⋮⋮ 拖动 → 排序 → 自动重绘路线</p>
     </div>
@@ -109,8 +109,10 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import draggable from 'vuedraggable'
-import { DEBUG_MODE } from '@/constants/config'
+import { useGlobalStore } from '@/store'
 import { mockPois } from '@/data/mockPois'
+
+const store = useGlobalStore()
 
 // =======================================================
 // 🔶 第六阶段：itinerary 改为 props（由 App.vue 持有）

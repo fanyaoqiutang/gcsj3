@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   【页面 3：多景点游览规划 · 严格对齐总体设计文档】
   非多日/Day分组业务，是 TSP 多点串联游览
   左侧：批量添加 POI / TSP自动/手动排序 / 游览时长约束 / 出行模式 / 封闭道路
@@ -160,7 +160,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import MapContainer from '@/components/MapContainer.vue'
-import { useGlobalStore } from '@/store/global'
+import { useGlobalStore } from '@/store'
 import { routeApi } from '@/api/route'
 import { mockPois } from '@/data/mockPois'
 

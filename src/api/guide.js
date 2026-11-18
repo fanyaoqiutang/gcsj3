@@ -12,8 +12,7 @@
 // 每个函数签名固定，mock/真实请求都遵循同一入参/返回结构
 // =======================================================
 
-import { USE_MOCK } from '@/constants/config'
-import { http } from './index'
+import { USE_MOCK, http } from './index'
 
 // ---------- Mock 数据（集中维护） ----------
 const mockData = {

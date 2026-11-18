@@ -1,8 +1,9 @@
-<template>
+﻿<template>
   <div ref="mapContainerRef" class="map-container"></div>
 </template>
 
 <script setup>
+import { useGlobalStore } from '@/store'
 import { ref, onMounted, onUnmounted } from 'vue'
 import Map from 'ol/Map'
 import View from 'ol/View'
@@ -20,10 +21,10 @@ import Style from 'ol/style/Style'
 import Circle from 'ol/style/Circle'
 import Fill from 'ol/style/Fill'
 import Stroke from 'ol/style/Stroke'
-import { wgs84ToWebMerc, webMercToWgs84 } from '@/utils/coordTransform'
-import { DEBUG_MODE } from '@/constants/config'
+import { wgs84ToWebMerc, webMercToWgs84 } from '@/utils'
 import { mockPois } from '@/data/mockPois'
 
+const store = useGlobalStore()
 const mapContainerRef = ref(null)
 let mapInstance = null
 const currentClickMode = ref('pick-endpoint')
@@ -72,7 +73,7 @@ function initMap() {
 
   renderMockPois(poiMarkerLayer)
   registerMapClickHandlers(poiMarkerLayer)
-  if (DEBUG_MODE) console.log('[MapContainer] 初始化完成')
+  if (store.isDebugMode) console.log('[MapContainer] 初始化完成')
 }
 
 function renderMockPois(layer) {
@@ -209,7 +210,7 @@ function highlightRemovedPois(removedPoiIds) {
       f.set('isRemoved', true)
     }
   })
-  if (DEBUG_MODE) console.log('[MapContainer] 高亮剔除景点:', removedPoiIds)
+  if (store.isDebugMode) console.log('[MapContainer] 高亮剔除景点:', removedPoiIds)
 }
 
 /** 清除剔除高亮 */

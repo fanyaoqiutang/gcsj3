@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   【应用根组件】
   只做路由出口 + 顶部导航栏
   各页面独立维护自己的左侧参数面板 + 中间地图 + 右侧视图
@@ -46,7 +46,7 @@
 
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
-import { useGlobalStore } from '@/store/global'
+import { useGlobalStore } from '@/store'
 const store = useGlobalStore()
 
 // ESC 快捷退出选点模式

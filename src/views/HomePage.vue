@@ -1,4 +1,4 @@
-<!--
+﻿<!--
   【页面 1：首页 / 地图总览 · 严格对齐总体设计文档】
   图层（由底至上）：基础底图 → 成都地铁矢量线路 → POI 景点点位 → 动态路网仿真（红色封闭路段）
   交互：POI 点击 → 便利贴弹窗（名称/简介/图片URL/人流指数/停留时长）+ 加入规划
@@ -71,7 +71,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import MapContainer from '@/components/MapContainer.vue'
-import { useGlobalStore } from '@/store/global'
+import { useGlobalStore } from '@/store'
 
 const store = useGlobalStore()
 const mapRef = ref(null)
