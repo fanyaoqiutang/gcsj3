@@ -1,0 +1,137 @@
+/* =======================================================
+   【全局视觉规范 · 成都便利贴手账风】
+   色板来源：项目设计文档
+   ======================================================= */
+
+/* ---------- CSS 变量 ---------- */
+:root {
+  --color-bg:        #f7f2e6;   /* 页面底色 + 浅圆点纹理 */
+  --color-card:      #fffdf7;   /* 卡片底色 */
+  --color-border:    #d9d2c4;   /* 边框分割线 */
+  --color-primary:   #9c3838;   /* 印章红：主按钮/选中态/标签 */
+  --color-text:      #3a3a3a;   /* 正文 */
+  --color-text-sub:  #555;      /* 次要文字 */
+  --color-tape:      #f0cc90;   /* 胶带装饰色（手账卡片半透明） */
+  --color-tab-bg:    #e9dcb8;   /* 选中 tab 底色 */
+  --color-btn-sec-bg:#f7f2e6;   /* 次要按钮底色 */
+  --color-btn-sec-border: #846f5b;
+
+  --radius-card:     4px;       /* 极小圆角 */
+  --radius-btn:      3px;
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(156,56,56,0.08);
+  --shadow-sticky: 0 2px 8px rgba(0,0,0,0.08);
+}
+
+/* ---------- 全局重置 ---------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { width: 100%; height: 100%; overflow: hidden; }
+body {
+  font-family: system-ui, -apple-system, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px; line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+}
+
+/* ---------- 页面底色纹理 + 布局骨架（关键！高度链路的根） ---------- */
+.app-pages-wrapper {
+  width: 100%; height: 100%;
+  display: flex;            /* ✅ 让子元素 .top-nav + .page-container 进入 flex 流 */
+  flex-direction: column;  /* ✅ 上下堆叠：顶部导航(固定高) + 主区域(撑满) */
+  background-color: var(--color-bg);
+  background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='2' cy='2' r='0.6' fill='%23d9d2c4' opacity='0.5'/%3E%3C/svg%3E");
+}
+
+/* ---------- 便利贴卡片（操作面板 / 表单 / 开发者工具） ---------- */
+.sticky-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 16px;
+}
+/* 便利贴 hover 微上浮 */
+.sticky-card:hover { box-shadow: 0 2px 6px rgba(0,0,0,0.08), 0 6px 18px rgba(156,56,56,0.1); }
+
+/* ---------- 手账预览卡片（带旋转 + 胶带） ---------- */
+.journal-card {
+  position: relative;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  padding: 18px 16px 14px;
+  box-shadow: var(--shadow-sticky);
+  transition: transform 0.2s;
+}
+.journal-card:hover { transform: translateY(-2px) rotate(0deg) !important; }
+
+/* 顶部胶带贴纸（纯装饰，半透明） */
+.journal-card::before {
+  content: '';
+  position: absolute; top: -8px; left: 50%;
+  transform: translateX(-50%) rotate(-3deg);
+  width: 60px; height: 20px;
+  background: var(--color-tape);
+  opacity: 0.7;
+  border-radius: 2px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+/* 迷你成都印章装饰（角落） */
+.journal-card::after {
+  content: '蓉';
+  position: absolute; bottom: 8px; right: 10px;
+  font-size: 11px; font-weight: 700;
+  color: var(--color-primary);
+  opacity: 0.4;
+  padding: 2px 4px;
+  border: 1px solid var(--color-primary);
+  border-radius: 2px;
+  line-height: 1;
+}
+
+/* ---------- 按钮 ---------- */
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-btn);
+  padding: 8px 16px;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.btn-primary:hover:not(:disabled) { background: #8a2e2e; }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.btn-secondary {
+  background: var(--color-btn-sec-bg);
+  color: var(--color-text);
+  border: 1px solid var(--color-btn-sec-border);
+  border-radius: var(--radius-btn);
+  padding: 7px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn-secondary:hover:not(:disabled) { background: var(--color-border); }
+
+/* ---------- Tab ---------- */
+.tab-active { background: var(--color-tab-bg) !important; font-weight: 600; }
+
+/* ---------- 选中态 Tag/Label ---------- */
+.tag-primary {
+  background: var(--color-primary);
+  color: #fff;
+  font-size: 11px; padding: 2px 8px; border-radius: 2px;
+  display: inline-block;
+}
+
+/* ---------- OpenLayers 控件样式覆盖 ---------- */
+.ol-control button { background: var(--color-card) !important; color: var(--color-text) !important; border-radius: 2px !important; border: 1px solid var(--color-border) !important; }
+.ol-control button:hover { background: var(--color-tab-bg) !important; }
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
