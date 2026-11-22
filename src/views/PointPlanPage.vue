@@ -1,29 +1,79 @@
-﻿<template>
+﻿﻿﻿﻿﻿﻿﻿﻿<template>
   <div class="page-point-plan">
 
     <!-- ========== 左侧参数面板 ========== -->
     <aside class="plan-left">
 
-      <!-- 起终点 -->
+      <!-- 起终点（搜索 + 地图拾取） -->
       <div class="sticky-card">
-        <h3 class="card-title">📍 起终点拾取</h3>
-        <div v-if="!store.isSelectPointMode && !store.hasBothEndpoints()" class="hint-row">
-          💡 点击右上角「📍选点」按钮后，在地图上依次点击拾取
+        <h3 class="card-title">📍 起终点</h3>
+
+        <!-- 🔍 起点搜索 -->
+        <div class="endpoint-search-block">
+          <div class="endpoint-label-row">
+            <span class="endpoint-dot start"></span><span>起点</span>
+            <button v-if="store.selectedStart" class="ep-clear-btn" @click="clearEp('start')">✕</button>
+          </div>
+          <div class="ep-input-wrap" :class="{active: activeField==='start'}">
+            <input
+              v-model="kwStart"
+              type="text"
+              placeholder="输入景点名或坐标…"
+              @focus="activeField='start'"
+              @blur="onBlurField"
+              @keydown.enter="onEnterSearch('start')"
+            />
+            <div v-if="kwStart && kwStart.trim().length >= 1 && matchedPois('start').length" class="ep-dropdown">
+              <div
+                v-for="p in matchedPois('start').slice(0,6)"
+                :key="p.id"
+                class="ep-dropdown-item"
+                @mousedown.prevent="applyPoi('start', p)"
+              >
+                <span class="ep-d-name">{{ p.name }}</span>
+                <span class="ep-d-sub">{{ p.category }} · 👥{{ p.crowdIndex }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="ep-coord-hint">{{ store.selectedStart ? format(store.selectedStart) : '未设置' }}</div>
         </div>
-        <div class="endpoint-row">
-          <span class="endpoint-dot start"></span>
-          <span class="endpoint-label">起点</span>
-          <span class="endpoint-val">{{ store.selectedStart ? format(store.selectedStart) : '未拾取' }}</span>
+
+        <!-- 🔍 终点搜索 -->
+        <div class="endpoint-search-block">
+          <div class="endpoint-label-row">
+            <span class="endpoint-dot end"></span><span>终点</span>
+            <button v-if="store.selectedEnd" class="ep-clear-btn" @click="clearEp('end')">✕</button>
+          </div>
+          <div class="ep-input-wrap" :class="{active: activeField==='end'}">
+            <input
+              v-model="kwEnd"
+              type="text"
+              placeholder="输入景点名或坐标…"
+              @focus="activeField='end'"
+              @blur="onBlurField"
+              @keydown.enter="onEnterSearch('end')"
+            />
+            <div v-if="kwEnd && kwEnd.trim().length >= 1 && matchedPois('end').length" class="ep-dropdown">
+              <div
+                v-for="p in matchedPois('end').slice(0,6)"
+                :key="p.id"
+                class="ep-dropdown-item"
+                @mousedown.prevent="applyPoi('end', p)"
+              >
+                <span class="ep-d-name">{{ p.name }}</span>
+                <span class="ep-d-sub">{{ p.category }} · 👥{{ p.crowdIndex }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="ep-coord-hint">{{ store.selectedEnd ? format(store.selectedEnd) : '未设置' }}</div>
         </div>
-        <div class="endpoint-row">
-          <span class="endpoint-dot end"></span>
-          <span class="endpoint-label">终点</span>
-          <span class="endpoint-val">{{ store.selectedEnd ? format(store.selectedEnd) : '未拾取' }}</span>
-        </div>
+
+        <div class="hint-row">💡 也可点右上角「📍选点」在地图上点击拾取</div>
+
         <div class="btn-row">
-          <button v-if="!store.isSelectPointMode" class="btn-secondary flex1" @click="store.toggleSelectPoint()">开启选点</button>
+          <button v-if="!store.isSelectPointMode" class="btn-secondary flex1" @click="store.toggleSelectPoint()">📍 开启选点</button>
           <button v-else class="btn-secondary flex1" @click="store.toggleSelectPoint()">退出选点</button>
-          <button class="btn-secondary flex1" @click="store.clearEndpoints()">清空</button>
+          <button class="btn-secondary flex1" @click="doClearAll">🗑️ 清空</button>
         </div>
       </div>
 
@@ -96,7 +146,7 @@
         </template>
       </div>
 
-      <!-- Tab2：路线预览（手账卡片样式） -->
+      <!-- Tab2：路线预览（手账卡片样式 + 路线摘要面板） -->
       <div v-else class="right-content">
         <div v-if="!schemeList.length" class="empty-card sticky-card">
           💡 规划后展示路线预览
@@ -117,6 +167,16 @@
             <li v-for="sp in s.spotList" :key="sp.spotId">{{ sp.name }}</li>
           </ol>
         </div>
+
+        <!-- 路线摘要面板（跟随当前激活方案） -->
+        <div v-if="activeScheme" class="rs-wrapper">
+          <RouteSummary
+            :scheme="activeScheme"
+            :mapRef="mapRef"
+            :schemeColor="schemeColor(activeScheme.schemeId)"
+            :travelMode="travelMode"
+          />
+        </div>
       </div>
     </aside>
   </div>
@@ -125,9 +185,91 @@
 <script setup>
 import { ref, watch, computed, onMounted } from 'vue'
 import MapContainer from '@/components/MapContainer.vue'
+import RouteSummary from '@/components/RouteSummary.vue'
 import { useGlobalStore } from '@/store'
 import { routeApi } from '@/api/route'
 import { wgs84ToWebMerc } from '@/utils'
+import { fetchScenicPois } from '@/api/scenicPois'
+
+// 🎯 GeoServer WFS 拉取的景点候选（失败自动降级 mockPois）
+const allPois = ref([])
+onMounted(async () => { allPois.value = await fetchScenicPois() })
+
+// 🔍 起终点搜索状态
+const kwStart = ref('')
+const kwEnd = ref('')
+const activeField = ref('')  // 'start' | 'end' | ''  — 当前聚焦哪个输入框
+
+// POI 模糊匹配
+function matchedPois(which) {
+  const kw = (which === 'start' ? kwStart.value : kwEnd.value).trim().toLowerCase()
+  if (!kw) return []
+  return allPois.value.filter(p =>
+    p.name.toLowerCase().includes(kw) ||
+    (p.description && p.description.toLowerCase().includes(kw)) ||
+    (p.category && p.category.toLowerCase().includes(kw))
+  )
+}
+
+// 应用选中的 POI 到起终点
+function applyPoi(which, poi) {
+  if (which === 'start') {
+    store.setSelectedStart({ name: poi.name, lon: poi.lon, lat: poi.lat })
+    kwStart.value = poi.name
+  } else {
+    store.setSelectedEnd({ name: poi.name, lon: poi.lon, lat: poi.lat })
+    kwEnd.value = poi.name
+  }
+  activeField.value = ''
+  mapRef.value?.flyToPoi(poi.lon, poi.lat, 16)
+}
+
+// 按回车：尝试解析坐标字符串；否则取第一个匹配 POI
+function onEnterSearch(which) {
+  const kw = (which === 'start' ? kwStart.value : kwEnd.value).trim()
+  if (!kw) return
+  // 坐标模式：104.053,30.663 或 104.053 30.663 或 [104.053,30.663]
+  const coordMatch = kw.match(/^\s*\[?\s*(-?\d+\.\d+)\s*[,\s]\s*(-?\d+\.\d+)\s*\]?\s*$/)
+  if (coordMatch) {
+    const lon = parseFloat(coordMatch[1])
+    const lat = parseFloat(coordMatch[2])
+    if (lon > 73 && lon < 135 && lat > 18 && lat < 54) {  // 中国范围
+      if (which === 'start') store.setSelectedStart({ name: '起点', lon, lat })
+      else store.setSelectedEnd({ name: '终点', lon, lat })
+      activeField.value = ''
+      mapRef.value?.flyToPoi(lon, lat, 15)
+      return
+    }
+  }
+  // POI 模式：取第一个匹配
+  const first = matchedPois(which)[0]
+  if (first) applyPoi(which, first)
+}
+
+function clearEp(which) {
+  if (which === 'start') { store.selectedStart = null; kwStart.value = ''; mapRef.value?.clearEndpointMarker('start') }
+  else { store.selectedEnd = null; kwEnd.value = ''; mapRef.value?.clearEndpointMarker('end') }
+  // 端点一改，路线也该作废
+  schemeList.value = []
+  store.setCurrentScheme('')
+  mapRef.value?.clearAll?.()
+}
+
+// 🗑️ 完整清空：起终点 + 搜索框 + 路线 + 右侧结果 + 地图所有 marker
+function doClearAll() {
+  store.clearEndpoints()
+  kwStart.value = ''
+  kwEnd.value = ''
+  activeField.value = ''
+  schemeList.value = []
+  store.setCurrentScheme('')
+  blockedSel.value = ''
+  mapRef.value?.clearAll?.()
+}
+
+function onBlurField() {
+  setTimeout(() => activeField.value = '', 150)  // 让 mousedown.prevent 有机会执行
+}
 
 const store = useGlobalStore()
 const mapRef = ref(null)
@@ -147,9 +289,9 @@ onMounted(() => {
 // ========== MapContainer → store 起终点联动 ==========
 function onPointsPicked({ start, end }) {
   // MapContainer pick-endpoint 模式下会依次 emit 两次 points-picked
-  // start/end 都是 [lon, lat] (WGS84)
-  if (start) store.setSelectedStart(start)
-  if (end) store.setSelectedEnd(end)
+  // start/end 都是 [lon, lat] (WGS84)，这里包成完整 POI 对象（name 兜底用起点/终点）
+  if (start) store.setSelectedStart({ name: '起点', lon: start[0], lat: start[1] })
+  if (end)   store.setSelectedEnd({ name: '终点', lon: end[0], lat: end[1] })
 }
 function onPoiClick(poiData) {
   // 规划页点 POI 不需要弹窗，可选：自动设为起点/终点
@@ -178,11 +320,15 @@ watch(() => store.currentSchemeId, id => {
 
 // ========== 规划完成 → MapContainer 分色渲染多方案路线 ==========
 watch(schemeList, list => {
-  if (list.length && !store.currentSchemeId) store.setCurrentScheme(list[0].schemeId)
-  if (!list.length) return
-  // 先清空旧路线
+  // 空数组：清干净所有路线 + 方案
+  if (!list.length || list.length === 0) {
+    mapRef.value?.clearAll?.()
+    store.setCurrentScheme('')
+    return
+  }
+  // 正常：先清空旧路线，再逐条渲染
+  if (!store.currentSchemeId) store.setCurrentScheme(list[0].schemeId)
   mapRef.value?.clearAll?.()
-  // 逐条方案渲染
   list.forEach(scheme => {
     const gj = scheme.routeGeoJson
     if (!gj) return
@@ -194,13 +340,18 @@ watch(schemeList, list => {
       coordinates: coords
     })
   })
-  // fit 到所有路线范围
   setTimeout(() => mapRef.value?.fitAllRoutes?.(), 100)
 })
 
 const activeScheme = computed(() => schemeList.value.find(s => s.schemeId === store.currentSchemeId) || null)
 
-function format(coord) { return `${coord[0].toFixed(3)}, ${coord[1].toFixed(3)}` }
+function format(poi) {
+  if (!poi) return '—'
+  // 兼容两种来源：POI 对象 {lon, lat} 或兜底坐标数组 [lon, lat]
+  const lon = poi.lon ?? poi[0]; const lat = poi.lat ?? poi[1]
+  const name = poi.name
+  return name ? `${name} (${lon.toFixed(3)}, ${lat.toFixed(3)})` : `${lon.toFixed(3)}, ${lat.toFixed(3)}`
+}
 function schemeColor(id) {
   const map = { 'scheme-A': '#e74c3c', 'scheme-B': '#27ae60', 'scheme-C': '#3498db' }
   return map[id] || '#888'
@@ -211,8 +362,8 @@ async function handlePlan() {
   loading.value = true
   try {
     const res = await routeApi.planRoute({
-      origin: store.selectedStart,
-      destination: store.selectedEnd,
+      startPoi: store.selectedStart,   // 完整 POI 对象 {name, lon, lat}
+      endPoi:   store.selectedEnd,
       mode: travelMode.value,
       blockedSegmentId: blockedSel.value || null
     })
@@ -235,6 +386,38 @@ async function handlePlan() {
 .endpoint-dot.start { background:#27ae60; }
 .endpoint-dot.end { background:#e74c3c; }
 .endpoint-label { width:32px; color:#666; }
+/* 📍 起终点搜索区块 */
+.endpoint-search-block { margin-bottom:12px; }
+.endpoint-label-row { display:flex; align-items:center; gap:6px; font-size:12px; color:#555; margin-bottom:4px; }
+.ep-clear-btn { margin-left:auto; border:none; background:none; color:#aaa; font-size:12px; cursor:pointer; padding:0 4px; }
+.ep-clear-btn:hover { color:#e74c3c; }
+
+.ep-input-wrap { position:relative; }
+.ep-input-wrap input {
+  width:100%; padding:7px 10px; font-size:12px; box-sizing:border-box;
+  border:1px solid var(--color-border); border-radius:var(--radius-btn);
+  background:#fff; outline:none; transition:border-color 0.15s;
+}
+.ep-input-wrap.active input,
+.ep-input-wrap input:focus { border-color:var(--color-primary); box-shadow:0 0 0 2px rgba(156,56,56,0.1); }
+
+.ep-dropdown {
+  position:absolute; left:0; right:0; top:calc(100% + 2px); z-index:100;
+  max-height:220px; overflow-y:auto;
+  background:#fff; border:1px solid var(--color-border); border-radius:var(--radius-btn);
+  box-shadow:0 4px 12px rgba(0,0,0,0.12);
+}
+.ep-dropdown-item {
+  padding:6px 10px; font-size:12px; cursor:pointer;
+  border-bottom:1px solid #f5f5f5; display:flex; justify-content:space-between; align-items:center;
+}
+.ep-dropdown-item:last-child { border-bottom:none; }
+.ep-dropdown-item:hover { background:rgba(156,56,56,0.08); }
+.ep-d-name { color:#333; font-weight:500; }
+.ep-d-sub { color:#999; font-size:10px; }
+
+.ep-coord-hint { font-size:10px; color:#aaa; margin-top:3px; }
+
 .endpoint-val { flex:1; color:#333; font-family:monospace; font-size:11px; }
 .btn-row { display:flex; gap:6px; margin-top:8px; }
 .flex1 { flex:1; }
@@ -250,6 +433,12 @@ async function handlePlan() {
 .right-content { flex:1; overflow-y:auto; padding-top:8px; }
 
 .empty-card { text-align:center; color:#888; font-size:12px; }
+.rs-wrapper {
+  margin-top:12px; padding:10px;
+  background:#fff;
+  border:1px solid var(--color-border);
+  border-radius: var(--radius-card);
+}
 .scheme-card { margin-top:8px; cursor:pointer; transition:all 0.15s; }
 .scheme-card.active { border-color:var(--color-primary); box-shadow:0 0 0 1px var(--color-primary); }
 .scheme-title { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--color-text); margin-bottom:4px; }

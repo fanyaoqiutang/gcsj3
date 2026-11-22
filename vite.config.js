@@ -20,10 +20,15 @@ export default defineConfig({
   server: {
     port: 5173,
     open: true,
-    // 🔴 关键：/api/* 请求代理到 Flask 后端
     proxy: {
+      // Flask 算法后端
       '/api': {
         target: 'http://localhost:5000',
+        changeOrigin: true
+      },
+      // GeoServer WMS / WFS 代理（绕开浏览器 CORS）
+      '/geoserver': {
+        target: 'http://localhost:8080',
         changeOrigin: true
       }
     }

@@ -1,4 +1,4 @@
-﻿<!--
+﻿﻿﻿﻿﻿<!--
   【页面 1：首页 / 地图总览 · 严格对齐总体设计文档】
   图层（由底至上）：基础底图 → 成都地铁矢量线路 → POI 景点点位 → 动态路网仿真（红色封闭路段）
   交互：POI 点击 → 便利贴弹窗（名称/简介/图片URL/人流指数/停留时长）+ 加入规划
@@ -18,21 +18,52 @@
 
       <!-- ========== 悬浮控件层（全部 absolute 脱离文档流） ========== -->
 
-      <!-- ① 图层开关（左上） -->
-      <div class="layer-switch-panel sticky-card">
-        <div class="layer-switch-title">🗂️ 图层开关</div>
-        <label class="layer-switch-item">
-          <input type="checkbox" v-model="layers.poi" @change="toggleLayer('poi-marker', layers.poi)" />
-          <span>📍 POI 景点点位</span>
-        </label>
-        <label class="layer-switch-item disabled">
-          <input type="checkbox" v-model="layers.metro" disabled />
-          <span style="color:#aaa;">🚇 地铁矢量线（队友数据待接入）</span>
-        </label>
-        <label class="layer-switch-item disabled">
-          <input type="checkbox" v-model="layers.roadBlock" disabled />
-          <span style="color:#aaa;">🚧 封闭道路仿真（队友数据待接入）</span>
-        </label>
+      <!-- ① 左上 Tab 容器：图层工具 / 景点库 / 宝藏路线 -->
+      <div class="home-tab-panel sticky-card">
+        <!-- Tab 头部 -->
+        <div class="home-tab-header">
+          <button
+            v-for="t in homeTabs"
+            :key="t.key"
+            class="home-tab-btn"
+            :class="{ active: store.currentHomeTab === t.key }"
+            @click="store.setCurrentHomeTab(t.key)"
+          >{{ t.label }}</button>
+        </div>
+
+        <!-- Tab1：图层工具（GeoServer WMS 全图层开关） -->
+        <div v-show="store.currentHomeTab === 'layer'" class="home-tab-body">
+          <div class="layer-switch-title">🗂️ 图层开关</div>
+          <label class="layer-switch-item">
+            <input type="checkbox" v-model="layers.walkRoad" @change="toggleLayer('gs-walk-road', layers.walkRoad)" />
+            <span>🚶 步行路网</span>
+          </label>
+          <label class="layer-switch-item">
+            <input type="checkbox" v-model="layers.metroLine" @change="toggleLayer('gs-subway-line', layers.metroLine)" />
+            <span>🚇 地铁线路</span>
+          </label>
+          <label class="layer-switch-item">
+            <input type="checkbox" v-model="layers.metroStation" @change="toggleLayer('gs-subway-station', layers.metroStation)" />
+            <span>🚉 地铁站点</span>
+          </label>
+          <label class="layer-switch-item">
+            <input type="checkbox" v-model="layers.scenicPoint" @change="toggleLayer('gs-scenic-point', layers.scenicPoint)" />
+            <span>🏛️ 景点点位（含中文标注）</span>
+          </label>
+          <label class="layer-switch-item">
+            <input type="checkbox" v-model="layers.poi" @change="toggleLayer('poi-marker', layers.poi)" />
+            <span>📍 POI 交互层（hover/点击）</span>
+          </label>
+        </div>
+
+        <!-- Tab2：景点库（占位空壳） -->
+        <div v-show="store.currentHomeTab === 'poi'" class="home-tab-body">
+        </div>
+
+        <!-- Tab3：宝藏路线 -->
+        <div v-show="store.currentHomeTab === 'route'" class="home-tab-body tr-body">
+          <TreasureRoutes />
+        </div>
       </div>
 
       <!-- ② 缩放/复位控件（右上，原生 OpenLayers Zoom 已存在于地图内部；这里只保留复位按钮） -->
@@ -70,15 +101,25 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import MapContainer from '@/components/MapContainer.vue'
+import TreasureRoutes from '@/components/TreasureRoutes.vue'
 import { useGlobalStore } from '@/store'
+
+const router = useRouter()
 
 const store = useGlobalStore()
 const mapRef = ref(null)
 
-const layers = ref({ metro: true, poi: true, roadBlock: true })
+const layers = ref({ walkRoad: true, metroLine: true, metroStation: true, scenicPoint: true, poi: true })
 const showPoiPopup = ref(false)
 const currentPoi = ref(null)
+
+const homeTabs = [
+  { key: 'layer', label: '🗂️ 图层工具' },
+  { key: 'poi',   label: '📖 景点库' },
+  { key: 'route', label: '🧭 宝藏路线' }
+]
 
 // ========== 首页初始化 ==========
 onMounted(() => {
@@ -94,46 +135,23 @@ function onPoiClick(poiData) {
   showPoiPopup.value = true
 }
 
-// ========== 图层显隐控制 ==========
+// ========== 图层显隐控制（MapContainer 已 defineExpose setLayerVisible） ==========
 function toggleLayer(layerId, visible) {
-  // MapContainer 内部没有直接暴露 setLayerVisible，先用 ref 获取 layers 遍历
-  // 🔴 后续 MapContainer defineExpose 增加 setLayerVisible(layerId, visible) 会更优雅
-  const mapInstance = getMapInstance()
-  if (!mapInstance) return
-  mapInstance.getLayers().forEach(layer => {
-    if (layer.get('layerId') === layerId) layer.setVisible(visible)
-  })
-}
-
-function getMapInstance() {
-  // 通过 MapContainer 的 DOM ref 间接拿；
-  // 更干净的做法是让 MapContainer defineExpose 暴露 mapInstance
-  // 这里做一个兼容写法
-  return mapRef.value?.$el?.querySelector('canvas')
-    ? mapRef.value?._mapInstance || null
-    : null
+  mapRef.value?.setLayerVisible(layerId, visible)
 }
 
 // ========== 复位视图 ==========
 function resetView() {
-  // MapContainer 未暴露 resetView，暂时用 flyToPoi 飞到宽窄巷子示意
-  // 🔴 后续 MapContainer defineExpose 增加 resetView()
   showPoiPopup.value = false
+  mapRef.value?.resetView?.()
 }
 
-// ========== 加入规划 ==========
+// ========== 加入规划（设为起点 + 跳转单点规划页） ==========
 function handleJoinPlan() {
   if (!currentPoi.value) return
-  store.addStartPoint({
-    id: currentPoi.value.id,
-    name: currentPoi.value.name,
-    lon: currentPoi.value.lon,
-    lat: currentPoi.value.lat
-  })
+  store.setSelectedStart([currentPoi.value.lon, currentPoi.value.lat])
   showPoiPopup.value = false
-  // 跳到单点规划页（后续可以改成自动填起点/终点）
-  // router.push({ path: '/point-plan' })
-  alert(`✅ 已将「${currentPoi.value.name}」加入规划，即将跳转到单点规划页`)
+  router.push({ path: '/point-plan' })
 }
 </script>
 
@@ -162,14 +180,35 @@ function handleJoinPlan() {
    z-index 层级：图层开关(5) < 缩放控件(6) < 欢迎卡片(10) < POI弹窗(20)
    ======================================================= */
 
-/* ① 图层开关 —— 地图左上 */
-.layer-switch-panel {
+/* ① Tab 容器 —— 地图左上（替换原 .layer-switch-panel） */
+.home-tab-panel {
   position:absolute; top:12px; left:12px;
-  padding:12px; width:185px;
+  width:210px;
   font-size:12px;
   z-index:5;
   user-select:none;
+  padding:0;
 }
+.home-tab-header {
+  display:flex; border-bottom:1px solid var(--color-border); flex-shrink:0;
+}
+.home-tab-btn {
+  flex:1; padding:8px 4px; border:none; background:transparent;
+  font-size:11px; cursor:pointer; color:#888;
+  border-bottom:2px solid transparent; transition:all 0.15s;
+  white-space:nowrap;
+}
+.home-tab-btn:hover { color:var(--color-primary); }
+.home-tab-btn.active {
+  color:var(--color-primary); font-weight:600;
+  border-bottom-color:var(--color-primary);
+  background:var(--color-tab-bg);
+}
+.home-tab-body { padding:12px; }
+.home-tab-body.tr-body { flex:1; overflow:hidden; display:flex; padding-top:10px; }
+.home-tab-body.tr-body > :deep(.tr-container) { flex:1; min-height:0; }
+
+/* Tab1 内部：图层开关（原样式保留，类名不变） */
 .layer-switch-title {
   font-weight:600; color:var(--color-primary); font-size:12px;
   margin-bottom:8px; padding-bottom:4px;

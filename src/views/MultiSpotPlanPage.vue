@@ -1,4 +1,4 @@
-﻿<!--
+﻿﻿﻿﻿﻿﻿﻿﻿﻿<!--
   【页面 3：多景点游览规划 · 严格对齐总体设计文档】
   非多日/Day分组业务，是 TSP 多点串联游览
   左侧：批量添加 POI / TSP自动/手动排序 / 游览时长约束 / 出行模式 / 封闭道路
@@ -11,12 +11,24 @@
     <!-- ========== 左侧参数面板 ========== -->
     <aside class="plan-left">
 
-      <!-- POI 批量添加 -->
+      <!-- POI 搜索 + 批量添加 -->
       <div class="sticky-card">
         <h3 class="card-title">🎯 景点选择</h3>
-        <div class="hint-row">从预设景点中勾选（或后续对接搜索API）</div>
-        <div class="poi-check-list">
-          <label v-for="p in availablePois" :key="p.id" class="poi-check-item">
+
+        <!-- 🔍 搜索框 -->
+        <div class="poi-search">
+          <input
+            v-model="poiKeyword"
+            type="text"
+            placeholder="搜索景点名称或关键词…"
+            class="poi-search-input"
+          />
+          <span v-if="poiKeyword" class="poi-search-clear" @click="poiKeyword=''">✕</span>
+        </div>
+
+        <!-- 过滤后的勾选列表 -->
+        <div v-if="filteredPois.length" class="poi-check-list">
+          <label v-for="p in filteredPois" :key="p.id" class="poi-check-item">
             <input type="checkbox"
               :checked="store.multiPoiList.some(x => x.id === p.id)"
               @change="togglePoi(p)" />
@@ -24,20 +36,28 @@
             <span class="poi-crowd">👥{{ p.crowdIndex }}</span>
           </label>
         </div>
+
+        <!-- 空态：搜不到 -->
+        <div v-else class="poi-search-empty">
+          {{ poiKeyword ? `没有找到包含「${poiKeyword}」的景点` : '暂无可用景点' }}
+        </div>
+
+        <!-- 已选数量提示 + 清空 -->
         <div v-if="store.multiPoiList.length" class="add-btn-row">
-          <button class="btn-secondary" style="flex:1;" @click="store.clearMultiPoi()">🗑️ 清空</button>
+          <span class="add-count">已选 {{ store.multiPoiList.length }} 个</span>
+          <button class="btn-secondary" style="flex:1;" @click="doClearAll">🗑️ 清空</button>
         </div>
       </div>
 
       <!-- 排序模式 -->
       <div class="sticky-card">
-        <h3 class="card-title">🔢 游览顺序</h3>
+        <h3 class="card-title">🧭 游览规划方式</h3>
         <div class="mode-switch">
-          <button class="mode-btn" :class="{active: sortMode==='tsp'}" @click="sortMode='tsp'">🤖 TSP 自动优化</button>
-          <button class="mode-btn" :class="{active: sortMode==='manual'}" @click="sortMode='manual'">✋ 手动拖拽排序</button>
+          <button class="mode-btn" :class="{active: sortMode==='tsp'}" @click="sortMode='tsp'">✨ 智能推荐最优路线</button>
+          <button class="mode-btn" :class="{active: sortMode==='manual'}" @click="sortMode='manual'">✋ 自己选择游览顺序</button>
         </div>
         <div v-if="sortMode==='manual'" class="hint-row" style="margin-top:8px;">
-          💡 规划结果出来后，右侧 Tab1 可拖拽调整顺序
+          💡 规划完成后可在右侧调整景点顺序
         </div>
       </div>
 
@@ -87,15 +107,16 @@
       </div>
     </main>
 
-    <!-- ========== 右侧双Tab结果 ========== -->
+    <!-- ========== 右侧3Tab结果 ========== -->
     <aside class="plan-right">
       <div class="right-tabs">
-        <button class="tab-btn" :class="{active: rightTab==='list'}" @click="rightTab='list'">📋 景点序列</button>
-        <button class="tab-btn" :class="{active: rightTab==='journal'}" @click="rightTab='journal'">📖 路线预览</button>
+        <button class="tab-btn" :class="{active: store.multiRightTab==='list'}" @click="store.setMultiRightTab('list')">📋 点位列表</button>
+        <button class="tab-btn" :class="{active: store.multiRightTab==='timeline'}" @click="store.setMultiRightTab('timeline')">⏳ 行程时间轴</button>
+        <button class="tab-btn" :class="{active: store.multiRightTab==='journal'}" @click="store.setMultiRightTab('journal')">📖 路线预览</button>
       </div>
 
-      <!-- Tab1：可拖拽景点列表 -->
-      <div v-if="rightTab==='list'" class="right-content">
+      <!-- Tab1：可拖拽点位列表（原有逻辑不动） -->
+      <div v-show="store.multiRightTab==='list'" class="right-content">
         <div v-if="!schemeList.length" class="empty-card sticky-card">
           💡 勾选 2+ 景点后规划
         </div>
@@ -113,19 +134,56 @@
             <span>⏱️ {{ s.totalTravelTime }}</span>
             <span v-if="s.transferCount">🔄 换乘{{ s.transferCount }}次</span>
           </div>
-          <!-- 🔴 后续对接 vuedraggable 拖拽排序 -->
-          <ol class="spot-list draggable">
+          <!-- 🧭 手动模式：当前方案可拖拽排序 -->
+          <draggable
+            v-if="sortMode==='manual' && store.currentSchemeId===s.schemeId"
+            v-model="s.spotList"
+            item-key="spotId"
+            class="spot-list draggable"
+            ghost-class="drag-ghost"
+            chosen-class="drag-chosen"
+            animation="200"
+            @end="(ev) => onSpotDragEnd(ev, s.schemeId)"
+          >
+            <template #item="{ element, index }">
+              <li>
+                <span class="spot-idx">{{ index+1 }}</span>
+                <span class="spot-name">🖐️ {{ element.name }}</span>
+                <span class="spot-stay">停留{{ element.stayMinutes }}min</span>
+              </li>
+            </template>
+          </draggable>
+          <!-- 非手动模式：只读列表 -->
+          <ol v-else class="spot-list draggable">
             <li v-for="(sp, i) in s.spotList" :key="sp.spotId">
               <span class="spot-idx">{{ i+1 }}</span>
               <span class="spot-name">{{ sp.name }}</span>
               <span class="spot-stay">停留{{ sp.stayMinutes }}min</span>
             </li>
           </ol>
+          <!-- 手动模式下，激活方案显示重算按钮 -->
+          <button
+            v-if="sortMode==='manual' && store.currentSchemeId===s.schemeId"
+            class="btn-secondary regenerate-btn"
+            :disabled="loading"
+            @click="regenerateManual"
+          >🔄 {{ loading ? '规划中...' : '按当前顺序重新规划' }}</button>
         </div>
       </div>
 
-      <!-- Tab2：手账预览 -->
-      <div v-else class="right-content">
+      <!-- Tab2：行程时间轴（新组件） -->
+      <div v-show="store.multiRightTab==='timeline'" class="right-content timeline-wrap">
+        <TripTimeline
+          :scheme="currentScheme"
+          :allSchemes="schemeList"
+          :travelMode="travelMode"
+          :mapRef="mapRef"
+          :schemeColor="schemeColor"
+        />
+      </div>
+
+      <!-- Tab3：手账预览（原内容不动） -->
+      <div v-show="store.multiRightTab==='journal'" class="right-content">
         <div v-if="!schemeList.length" class="empty-card sticky-card">
           💡 规划后展示路线预览
         </div>
@@ -158,23 +216,49 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
+import draggable from 'vuedraggable'
 import MapContainer from '@/components/MapContainer.vue'
+import TripTimeline from '@/components/TripTimeline.vue'
 import { useGlobalStore } from '@/store'
 import { routeApi } from '@/api/route'
-import { mockPois } from '@/data/mockPois'
+import { fetchScenicPois } from '@/api/scenicPois'
 
 const store = useGlobalStore()
 const mapRef = ref(null)
-const availablePois = ref(mockPois)
+const availablePois = ref([])
+const poiListLoading = ref(false)
+
+// 页面初始化拉取 GeoServer WFS POI（失败降级 mock）
+onMounted(async () => {
+  poiListLoading.value = true
+  availablePois.value = await fetchScenicPois()
+  poiListLoading.value = false
+})
 
 const sortMode = ref('tsp')
 const travelMode = ref('walk')
 const timeLimit = ref(240)
 const blockedSel = ref('')
-const rightTab = ref('list')
 const loading = ref(false)
 const schemeList = ref([])
+
+// 🔍 POI 搜索
+const poiKeyword = ref('')
+const filteredPois = computed(() => {
+  const kw = poiKeyword.value.trim().toLowerCase()
+  if (!kw) return availablePois.value
+  return availablePois.value.filter(p =>
+    p.name.toLowerCase().includes(kw) ||
+    (p.description && p.description.toLowerCase().includes(kw)) ||
+    (p.category && p.category.toLowerCase().includes(kw))
+  )
+})
+
+// 当前选中的方案（给时间轴组件用）
+const currentScheme = computed(() =>
+  schemeList.value.find(s => s.schemeId === store.currentSchemeId) || schemeList.value[0] || null
+)
 
 // ========== 封闭道路 → MapContainer 渲染红色高亮 ==========
 watch(blockedSel, v => {
@@ -195,8 +279,14 @@ watch(() => store.currentSchemeId, id => {
 
 // ========== 规划完成 → MapContainer 多方案分色渲染 ==========
 watch(schemeList, list => {
-  if (list.length && !store.currentSchemeId) store.setCurrentScheme(list[0].schemeId)
-  if (!list.length) return
+  // 空数组：清干净所有路线 + 漫游状态
+  if (!list.length || list.length === 0) {
+    mapRef.value?.clearAll?.()
+    store.clearCurrentScheme()
+    return
+  }
+  // 正常：先清空旧路线，再逐条渲染
+  if (!store.currentSchemeId) store.setCurrentScheme(list[0].schemeId)
   mapRef.value?.clearAll?.()
   list.forEach(scheme => {
     const gj = scheme.routeGeoJson
@@ -229,8 +319,46 @@ async function handlePlan() {
   try {
     const res = await routeApi.planMultiPoiRoute({
       poiCoords: store.getMultiPoiCoords(),
+      poiFullList: store.multiPoiList,   // 🔴 完整 POI 列表（含 name），让 mock 能填真实景点名
       mode: travelMode.value,
-      blockedSegmentId: blockedSel.value || null
+      blockedSegmentId: blockedSel.value || null,
+      preservedOrder: sortMode.value === 'manual'
+    })
+    schemeList.value = res.schemeList
+    store.setCurrentScheme(res.schemeList[0].schemeId)
+  } finally { loading.value = false }
+}
+
+// ========== 手动拖拽排序：拖拽结束只调 spotList，不立即重算路线 ==========
+function onSpotDragEnd(ev, schemeId) {
+  const scheme = schemeList.value.find(s => s.schemeId === schemeId)
+  if (!scheme) return
+  // 更新 spotList 顺序（vuedraggable 已直接修改了数组，但我们要确保 routeGeoJson 后续同步）
+  schemeList.value = [...schemeList.value]
+}
+
+// ========== 手动模式：按用户拖完的新顺序重新规划 ==========
+// 🗑️ 完整清空：景点列表 + 方案 + 路线 + 地图 marker
+function doClearAll() {
+  store.clearMultiPoi()
+  store.clearCurrentScheme()
+  blockedSel.value = ''
+  poiKeyword.value = ''
+  schemeList.value = []
+  mapRef.value?.clearAll?.()
+}
+
+async function regenerateManual() {
+  if (!currentScheme.value) return
+  loading.value = true
+  try {
+    const coords = currentScheme.value.spotList.map(s => [s.lon, s.lat])
+    const res = await routeApi.planMultiPoiRoute({
+      poiCoords: coords,
+      poiFullList: currentScheme.value.spotList,   // 🔴 直接用当前方案的 spotList（已带 name）
+      mode: travelMode.value,
+      blockedSegmentId: blockedSel.value || null,
+      preservedOrder: true
     })
     schemeList.value = res.schemeList
     store.setCurrentScheme(res.schemeList[0].schemeId)
@@ -247,7 +375,35 @@ async function handlePlan() {
 .card-title { font-size:13px; font-weight:600; color:var(--color-primary); margin:0 0 10px; padding-bottom:6px; border-bottom:1px dashed var(--color-border); }
 .hint-row { font-size:11px; color:#999; margin-bottom:8px; line-height:1.5; }
 
-.poi-check-list { max-height:160px; overflow-y:auto; }
+/* 🔍 搜索框 */
+.poi-search { position:relative; margin-bottom:8px; }
+.poi-search-input {
+  width:100%; padding:6px 26px 6px 10px;
+  border:1px solid var(--color-border);
+  border-radius:var(--radius-btn);
+  font-size:12px;
+  background:#fff;
+  box-sizing:border-box;
+  outline:none;
+  transition:border-color 0.15s;
+}
+.poi-search-input:focus { border-color:var(--color-primary); }
+.poi-search-clear {
+  position:absolute; right:8px; top:50%; transform:translateY(-50%);
+  color:#aaa; font-size:11px; cursor:pointer;
+}
+.poi-search-clear:hover { color:#e74c3c; }
+
+.poi-check-list { max-height:140px; overflow-y:auto; }
+.poi-search-empty {
+  font-size:11px; color:#aaa; text-align:center;
+  padding:14px 0;
+}
+
+.add-count {
+  font-size:11px; color:var(--color-primary); margin-right:6px;
+  align-self:center;
+}
 .poi-check-item { display:flex; align-items:center; gap:6px; font-size:12px; padding:3px 0; cursor:pointer; }
 .poi-check-item input { accent-color: var(--color-primary); }
 .poi-check-item .poi-name { flex:1; color:#333; }
@@ -273,6 +429,8 @@ async function handlePlan() {
 .tab-btn { flex:1; padding:8px; border:none; background:transparent; font-size:12px; cursor:pointer; color:#666; border-bottom:2px solid transparent; }
 .tab-btn.active { background:var(--color-tab-bg); color:var(--color-primary); font-weight:600; border-bottom-color:var(--color-primary); }
 .right-content { flex:1; overflow-y:auto; padding-top:8px; }
+.right-content.timeline-wrap { padding-top:0; overflow:hidden; display:flex; flex-direction:column; }
+.right-content.timeline-wrap > :deep(*) { flex:1; min-height:0; overflow-y:auto; }
 
 .empty-card { text-align:center; color:#888; font-size:12px; }
 .scheme-card { margin-top:8px; cursor:pointer; transition:all 0.15s; }
@@ -286,7 +444,12 @@ async function handlePlan() {
 .spot-list.draggable li {
   display:flex; align-items:center; gap:6px; padding:4px 6px; margin-bottom:2px;
   border:1px solid var(--color-border); border-radius:2px; background:#fff;
+  cursor: grab; transition: transform 0.15s, box-shadow 0.15s;
 }
+.spot-list.draggable li:active { cursor: grabbing; }
+.drag-ghost { background: rgba(156,56,56,0.15) !important; border: 1px dashed var(--color-primary) !important; opacity: 0.5; }
+.drag-chosen { box-shadow: 0 4px 12px rgba(156,56,56,0.3); transform: scale(1.02); z-index: 10; position: relative; }
+.regenerate-btn { margin-top: 8px; width: 100%; padding: 7px; font-size: 12px; }
 .spot-idx { width:18px; height:18px; border-radius:50%; background:var(--color-primary); color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
 .spot-name { flex:1; color:#333; }
 .spot-stay { color:#888; font-size:11px; }

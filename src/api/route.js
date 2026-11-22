@@ -1,4 +1,4 @@
-﻿// =======================================================
+﻿﻿﻿﻿// =======================================================
 // 銆愯矾绾胯鍒?API 路 涓ユ牸瀵归綈鍚庣鎺ュ彛濂戠害銆?
 // 鍚庣杩斿洖缁撴瀯锛歿 schemeList: [{ 鏂规A }, { 鏂规B }, ...] }
 // 姣忎釜鏂规鍖呭惈涓ゅ瀛楁闆嗗悎锛?
@@ -22,9 +22,10 @@ export const routeApi = {
     if (USE_MOCK) {
       return new Promise(resolve => {
         setTimeout(() => {
+          // 🔴 传完整 POI 对象（含 name），不再只传坐标
           resolve(buildMockSchemeList(
-            params.origin,
-            params.destination,
+            params.startPoi || params.origin,    // 兼容老参数（传纯坐标也行）
+            params.endPoi   || params.destination,
             params.mode || 'walk',
             params.blockedSegmentId || null
           ))
@@ -35,8 +36,9 @@ export const routeApi = {
   },
 
   /**
-   * 澶氭櫙鐐规父瑙堣鍒掞紙TSP 椤哄簭浼樺寲锛?
-   * @param {{ poiCoords: Array<[number,number]>, mode: 'walk'|'metro', blockedSegmentId?: string }} params
+   * 澶氭櫙鐐规父瑙堣鍒?
+   * @param {{ poiCoords: Array<[number,number]>, mode: 'walk'|'metro', blockedSegmentId?: string, preservedOrder?: boolean }} params
+   *   preservedOrder=true 鎺ユ敹鐢ㄦ埛鎵嬪姟鎺掍簭锛屼笉鍋氭帰璺垪涓?TSP 鎷呲L
    * @returns {Promise<{ schemeList: Array }>}
    */
   planMultiPoiRoute(params) {
@@ -45,11 +47,13 @@ export const routeApi = {
         setTimeout(() => {
           resolve(buildMockMultiPoiSchemeList(
             params.poiCoords,
-            params.mode || 'walk'
+            params.mode || 'walk',
+            params.preservedOrder || false,
+            params.poiFullList || []   // 🔴 完整 POI 列表（含 name）
           ))
         }, 500)
       })
     }
-    // 馃敶 鑱旇皟鏃跺惎鐢細return http.post('/api/route/multi-poi', params).then(r => r.data)
+    // 馃敶 鑱旇皟鏃跺惎鐢細return http.post('/api/route/multi-poi', params).then(r => r.data)
   }
 }
